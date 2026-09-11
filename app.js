@@ -28,7 +28,13 @@ const techFields = [
   ['setting', 'Escenario / entorno']
 ];
 
-const state = { fichas: [], fichaId: null, tab: 'ficha' };
+const state = { fichas: [], fichaId: null, tab: 'ficha', availableTags: [] };
+
+const DEFAULT_TAGS = [
+  'cinematic', 'photorealistic', 'anime', 'fantasy', '8k detail', 'film grain',
+  'shallow depth of field', 'moody atmosphere', 'volumetric light', 'concept art',
+  'epic scale', 'studio lighting', 'golden hour', 'high contrast'
+];
 
 function emptyFicha() {
   const t = now();
@@ -54,10 +60,16 @@ async function persist(f) {
 
 async function load() {
   state.fichas = await DB.all('fichas');
+  state.availableTags = await DB.all('tags');
+  if (!state.availableTags.length) {
+    for (const label of DEFAULT_TAGS) await DB.put('tags', { id: uid(), label });
+    state.availableTags = await DB.all('tags');
+  }
   renderAll();
 }
 async function refresh() {
   state.fichas = await DB.all('fichas');
+  state.availableTags = await DB.all('tags');
   renderAll();
 }
 
@@ -150,7 +162,15 @@ function tabFicha(f) {
         <label class="field"><span>Nombre</span><input name="name" value="${esc(f.name)}" required></label>
         <label class="field"><span>Estilo</span><select name="style">${Object.entries(PromptBuilder.STYLE_PRESETS).map(([k, v]) => `<option value="${k}" ${f.style === k ? 'selected' : ''}>${v.label}</option>`).join('')}<option value="custom" ${f.style === 'custom' ? 'selected' : ''}>Personalizado...</option></select></label>
         ${f.style === 'custom' ? `<label class="field full"><span>Descripción de estilo personalizado</span><input name="customStyle" value="${esc(f.customStyle || '')}"></label>` : ''}
-        <label class="field full"><span>Tags (separados por coma)</span><input name="tags" value="${esc((f.tags || []).join(', '))}"></label>
+        <div class="field full">
+          <span>Tags</span>
+          <div class="tag-picker" id="tagPicker"></div>
+          <div class="tag-add-row">
+            <input id="newTagInput" placeholder="Agregar tag nuevo...">
+            <button type="button" id="addTagBtn">+ Agregar</button>
+          </div>
+          <input type="hidden" name="tags" id="tagsHidden" value="${esc((f.tags || []).join(','))}">
+        </div>
       </div>
     </div>
     <div class="card">
@@ -169,8 +189,42 @@ function tabFicha(f) {
   </form>`;
 }
 
+function bindTagPicker() {
+  const hidden = $('#tagsHidden');
+  const getSelected = () => new Set((hidden.value || '').split(',').map(s => s.trim()).filter(Boolean));
+  function renderChips() {
+    const selected = getSelected();
+    $('#tagPicker').innerHTML = state.availableTags.map(t =>
+      `<button type="button" class="tag-chip ${selected.has(t.label) ? 'selected' : ''}" data-tag="${esc(t.label)}">${esc(t.label)}</button>`
+    ).join('') || '<span style="color:var(--muted);font-size:12px">Sin tags todavía, agrega el primero abajo</span>';
+    $$('.tag-chip').forEach(chip => chip.onclick = () => {
+      const sel = getSelected();
+      const tag = chip.dataset.tag;
+      if (sel.has(tag)) sel.delete(tag); else sel.add(tag);
+      hidden.value = [...sel].join(',');
+      renderChips();
+    });
+  }
+  renderChips();
+  $('#addTagBtn').onclick = async () => {
+    const input = $('#newTagInput');
+    const label = input.value.trim();
+    if (!label) return;
+    if (!state.availableTags.some(t => t.label.toLowerCase() === label.toLowerCase())) {
+      await DB.put('tags', { id: uid(), label });
+      state.availableTags = await DB.all('tags');
+    }
+    const sel = getSelected();
+    sel.add(label);
+    hidden.value = [...sel].join(',');
+    input.value = '';
+    renderChips();
+  };
+}
+
 function bindFichaTab(f) {
   const form = $('#fichaForm');
+  bindTagPicker();
   const styleSelect = form.querySelector('[name=style]');
   styleSelect.onchange = () => {
     const existing = form.querySelector('[name=customStyle]');

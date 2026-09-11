@@ -1,5 +1,5 @@
 const DB = (() => {
-  const NAME = 'ficha-referencia', VERSION = 1;
+  const NAME = 'ficha-referencia', VERSION = 2;
   let promise;
   function open() {
     if (promise) return promise;
@@ -8,6 +8,7 @@ const DB = (() => {
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains('fichas')) db.createObjectStore('fichas', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('tags')) db.createObjectStore('tags', { keyPath: 'id' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
