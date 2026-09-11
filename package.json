@@ -1,0 +1,9 @@
+{
+  "name": "ficha-de-referencia",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fichas de personaje/referencia para generación de imágenes y video con IA",
+  "dependencies": {
+    "@fal-ai/client": "^1.2.0"
+  }
+}

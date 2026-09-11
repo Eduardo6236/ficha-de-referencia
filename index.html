@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ficha de Referencia</title>
+<meta name="theme-color" content="#0f1012">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><b>FICHA</b> DE REFERENCIA</div>
+  <div class="top-actions">
+    <button id="installBtn" hidden>Instalar app</button>
+    <button id="exportLibraryBtn" title="Exportar toda la librería">Exportar todo</button>
+    <label class="file-button"><input id="importLibraryInput" type="file" accept="application/json">Importar</label>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="search"><input id="fichaSearch" placeholder="Buscar ficha..."></div>
+    <button class="primary" id="newFichaBtn">+ Nueva ficha</button>
+    <div id="fichaList"></div>
+  </aside>
+
+  <div id="workspace"></div>
+</main>
+
+<div id="toast"></div>
+
+<script src="db.js"></script>
+<script src="promptBuilder.js"></script>
+<script src="exportImport.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
