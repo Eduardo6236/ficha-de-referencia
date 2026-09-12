@@ -424,7 +424,7 @@ async function apiNanoBanana(f, prompt) {
 async function apiFalImage(f, prompt) {
   const primary = f.referenceImages.find(r => r.isPrimary) || f.referenceImages[0];
   const data = await callApi('/api/generate-fal-image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, imageDataUrl: primary?.dataUrl }) });
-  return data.imageUrl;
+  return toLocalDataUrl(data.imageUrl);
 }
 async function apiFalVideoSubmit(f, prompt, durationSeconds, generateAudio) {
   const primary = f.referenceImages.find(r => r.isPrimary) || f.referenceImages[0];
@@ -448,7 +448,8 @@ async function pollFalVideo(fichaId, genId, requestId) {
     const statusData = await callApi(`/api/fal-video-status?requestId=${encodeURIComponent(requestId)}`);
     if (statusData.status === 'COMPLETED') {
       const resultData = await callApi(`/api/fal-video-result?requestId=${encodeURIComponent(requestId)}`);
-      await finishGeneration(fichaId, genId, { status: 'done', resultUrl: resultData.videoUrl });
+      const resultUrl = await toLocalDataUrl(resultData.videoUrl);
+      await finishGeneration(fichaId, genId, { status: 'done', resultUrl });
       return;
     }
     if (statusData.status === 'ERROR') {
@@ -499,6 +500,13 @@ async function urlToDataUrl(url) {
     r.onerror = reject;
     r.readAsDataURL(blob);
   });
+}
+
+// Fal.ai devuelve URLs remotas (expiran y no cachean bien offline); las
+// bajamos como data URL apenas terminan para que queden disponibles sin conexión.
+async function toLocalDataUrl(url) {
+  try { return await urlToDataUrl(url); }
+  catch { return url; }
 }
 
 async function useGenerationAsReference(f, genId) {
