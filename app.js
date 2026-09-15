@@ -293,29 +293,38 @@ function readAsDataUrl(file) {
 // redimensionar lo superan fácil. Bajamos a un tamaño razonable antes de
 // guardar Y de nuevo justo antes de enviar (por si la imagen ya estaba
 // guardada de antes de este fix, o vino de una ficha importada).
-const MAX_REFERENCE_DIMENSION = 1600;
-const REFERENCE_JPEG_QUALITY = 0.85;
 const MAX_REFERENCE_BYTES = 1_200_000;
+// Pasadas progresivas: si tras redimensionar sigue pesando de más (fotos muy
+// detalladas, o el primer intento no alcanzó), se aprieta más en cada vuelta.
+const RESIZE_STEPS = [[1600, 0.85], [1280, 0.75], [960, 0.65], [720, 0.55]];
 
-function resizeDataUrl(dataUrl) {
-  return new Promise(resolve => {
+function loadImageElement(dataUrl) {
+  return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, MAX_REFERENCE_DIMENSION / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', REFERENCE_JPEG_QUALITY));
-    };
-    img.onerror = () => resolve(dataUrl);
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('No se pudo procesar esa imagen (formato no soportado por el navegador).'));
     img.src = dataUrl;
   });
 }
 
-function ensureSendableDataUrl(dataUrl) {
-  if (dataUrl.startsWith('data:image/svg+xml') || dataUrl.length * 0.75 < MAX_REFERENCE_BYTES) return Promise.resolve(dataUrl);
-  return resizeDataUrl(dataUrl);
+async function resizeDataUrl(dataUrl, maxDim, quality) {
+  const img = await loadImageElement(dataUrl);
+  const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(img.width * scale));
+  canvas.height = Math.max(1, Math.round(img.height * scale));
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+async function ensureSendableDataUrl(dataUrl) {
+  if (dataUrl.startsWith('data:image/svg+xml') || dataUrl.length * 0.75 < MAX_REFERENCE_BYTES) return dataUrl;
+  let current = dataUrl;
+  for (const [dim, quality] of RESIZE_STEPS) {
+    current = await resizeDataUrl(current, dim, quality);
+    if (current.length * 0.75 < MAX_REFERENCE_BYTES) break;
+  }
+  return current;
 }
 
 async function fileToDataUrl(file) {
@@ -444,7 +453,10 @@ async function callApi(path, opts) {
   const res = await fetch(path, opts);
   let data = {};
   try { data = await res.json(); } catch { /* non-JSON error body */ }
-  if (res.status === 413) throw new Error('La imagen de referencia es demasiado grande para enviarla. Eliminala y volvé a subirla.');
+  if (res.status === 413) {
+    const sentMB = typeof opts?.body === 'string' ? (opts.body.length / 1024 / 1024).toFixed(2) : '?';
+    throw new Error(`La imagen de referencia sigue siendo muy grande (se enviaron ${sentMB}MB). Probá con otra foto.`);
+  }
   if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
   return data;
 }
