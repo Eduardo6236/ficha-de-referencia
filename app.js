@@ -290,14 +290,14 @@ function readAsDataUrl(file) {
 
 // Las APIs de generación viajan como JSON con la imagen en base64, y Vercel
 // rechaza requests de más de ~4.5MB (Error 413) — fotos de celular sin
-// redimensionar lo superan fácil. Bajamos a un tamaño razonable antes de guardar.
+// redimensionar lo superan fácil. Bajamos a un tamaño razonable antes de
+// guardar Y de nuevo justo antes de enviar (por si la imagen ya estaba
+// guardada de antes de este fix, o vino de una ficha importada).
 const MAX_REFERENCE_DIMENSION = 1600;
 const REFERENCE_JPEG_QUALITY = 0.85;
+const MAX_REFERENCE_BYTES = 1_200_000;
 
-async function fileToDataUrl(file) {
-  const dataUrl = await readAsDataUrl(file);
-  if (file.type === 'image/svg+xml' || file.size < 700_000) return dataUrl;
-
+function resizeDataUrl(dataUrl) {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
@@ -311,6 +311,15 @@ async function fileToDataUrl(file) {
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
   });
+}
+
+function ensureSendableDataUrl(dataUrl) {
+  if (dataUrl.startsWith('data:image/svg+xml') || dataUrl.length * 0.75 < MAX_REFERENCE_BYTES) return Promise.resolve(dataUrl);
+  return resizeDataUrl(dataUrl);
+}
+
+async function fileToDataUrl(file) {
+  return ensureSendableDataUrl(await readAsDataUrl(file));
 }
 
 async function importImages(files) {
@@ -443,18 +452,23 @@ function mimeFromDataUrl(dataUrl) { return (dataUrl.match(/^data:(.*?);base64,/)
 function base64FromDataUrl(dataUrl) { return dataUrl.split(',')[1] || ''; }
 
 async function apiNanoBanana(f, prompt) {
-  const referenceImages = f.referenceImages.map(r => ({ data: base64FromDataUrl(r.dataUrl), mimeType: mimeFromDataUrl(r.dataUrl) }));
+  const referenceImages = await Promise.all(f.referenceImages.map(async r => {
+    const dataUrl = await ensureSendableDataUrl(r.dataUrl);
+    return { data: base64FromDataUrl(dataUrl), mimeType: mimeFromDataUrl(dataUrl) };
+  }));
   const data = await callApi('/api/generate-image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, referenceImages }) });
   return `data:${data.mimeType};base64,${data.imageBase64}`;
 }
 async function apiFalImage(f, prompt) {
   const primary = f.referenceImages.find(r => r.isPrimary) || f.referenceImages[0];
-  const data = await callApi('/api/generate-fal-image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, imageDataUrl: primary?.dataUrl }) });
+  const imageDataUrl = primary && await ensureSendableDataUrl(primary.dataUrl);
+  const data = await callApi('/api/generate-fal-image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, imageDataUrl }) });
   return toLocalDataUrl(data.imageUrl);
 }
 async function apiFalVideoSubmit(f, prompt, durationSeconds, generateAudio) {
   const primary = f.referenceImages.find(r => r.isPrimary) || f.referenceImages[0];
-  const data = await callApi('/api/generate-fal-video', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, imageDataUrl: primary?.dataUrl, durationSeconds, generateAudio }) });
+  const imageDataUrl = primary && await ensureSendableDataUrl(primary.dataUrl);
+  const data = await callApi('/api/generate-fal-video', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, imageDataUrl, durationSeconds, generateAudio }) });
   return data.requestId;
 }
 
