@@ -279,12 +279,37 @@ function tabImagenes(f) {
     </div>`;
 }
 
-async function fileToDataUrl(file) {
+function readAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(r.result);
     r.onerror = reject;
     r.readAsDataURL(file);
+  });
+}
+
+// Las APIs de generación viajan como JSON con la imagen en base64, y Vercel
+// rechaza requests de más de ~4.5MB (Error 413) — fotos de celular sin
+// redimensionar lo superan fácil. Bajamos a un tamaño razonable antes de guardar.
+const MAX_REFERENCE_DIMENSION = 1600;
+const REFERENCE_JPEG_QUALITY = 0.85;
+
+async function fileToDataUrl(file) {
+  const dataUrl = await readAsDataUrl(file);
+  if (file.type === 'image/svg+xml' || file.size < 700_000) return dataUrl;
+
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, MAX_REFERENCE_DIMENSION / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', REFERENCE_JPEG_QUALITY));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
   });
 }
 
@@ -410,6 +435,7 @@ async function callApi(path, opts) {
   const res = await fetch(path, opts);
   let data = {};
   try { data = await res.json(); } catch { /* non-JSON error body */ }
+  if (res.status === 413) throw new Error('La imagen de referencia es demasiado grande para enviarla. Eliminala y volvé a subirla.');
   if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
   return data;
 }
