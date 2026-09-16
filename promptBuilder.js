@@ -17,6 +17,7 @@ const PromptBuilder = (() => {
   const PLATFORM_NOTES = {
     'nano-banana': '',
     'fal-image': '',
+    'openai-image': '',
     'fal-video': 'Describe camera movement and motion explicitly (e.g. slow push-in, orbit, handheld).',
     'kling': 'Describe camera movement and motion explicitly (e.g. slow push-in, orbit, handheld).',
     'higgsfield': '',

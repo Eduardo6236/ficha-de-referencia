@@ -405,7 +405,7 @@ function tabGenerar(f) {
       <h2>Prompt</h2>
       <div class="form-grid">
         <label class="field"><span>Plantilla para plataforma</span><select id="promptPlatform">
-          ${[['nano-banana', 'Nano Banana'], ['fal-image', 'Fal.ai (imagen)'], ['fal-video', 'Fal.ai / Kling (video)'], ['higgsfield', 'Higgsfield'], ['veo', 'Veo'], ['other', 'Otra plataforma']].map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}
+          ${[['nano-banana', 'Nano Banana'], ['fal-image', 'Fal.ai (imagen)'], ['openai-image', 'ChatGPT (imagen)'], ['fal-video', 'Fal.ai / Kling (video)'], ['higgsfield', 'Higgsfield'], ['veo', 'Veo'], ['other', 'Otra plataforma']].map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}
         </select></label>
         <div class="field" style="align-self:end"><button type="button" id="regenPrompt">↻ Regenerar sugerencia</button></div>
       </div>
@@ -419,6 +419,7 @@ function tabGenerar(f) {
       <div class="gen-providers">
         <button class="provider-btn" data-generate="nano-banana" ${f.locked || noRefs ? 'disabled' : ''}><b>Nano Banana</b><small>Imagen · Gemini</small></button>
         <button class="provider-btn" data-generate="fal-image" ${f.locked || noRefs ? 'disabled' : ''}><b>Fal.ai</b><small>Imagen</small></button>
+        <button class="provider-btn" data-generate="openai-image" ${f.locked || noRefs ? 'disabled' : ''}><b>ChatGPT</b><small>Imagen · OpenAI</small></button>
         <div class="provider-btn" style="gap:8px">
           <b>Fal.ai / Kling</b><small>Video desde imagen</small>
           <label class="field" style="margin-top:4px"><span>Duración (seg)</span><input id="videoDuration" type="number" min="3" max="15" value="5" style="width:70px"></label>
@@ -483,6 +484,11 @@ async function apiFalVideoSubmit(f, prompt, durationSeconds, generateAudio) {
   const data = await callApi('/api/generate-fal-video', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, imageDataUrl, durationSeconds, generateAudio }) });
   return data.requestId;
 }
+async function apiOpenAiImage(f, prompt) {
+  const referenceImages = await Promise.all(f.referenceImages.map(r => ensureSendableDataUrl(r.dataUrl)));
+  const data = await callApi('/api/generate-openai-image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, referenceImages }) });
+  return `data:${data.mimeType};base64,${data.imageBase64}`;
+}
 
 async function finishGeneration(fichaId, genId, patch) {
   const fresh = await DB.get('fichas', fichaId);
@@ -530,6 +536,9 @@ async function startGeneration(f, provider) {
       await finishGeneration(fichaId, genId, { status: 'done', resultUrl });
     } else if (provider === 'fal-image') {
       const resultUrl = await apiFalImage(f, prompt);
+      await finishGeneration(fichaId, genId, { status: 'done', resultUrl });
+    } else if (provider === 'openai-image') {
+      const resultUrl = await apiOpenAiImage(f, prompt);
       await finishGeneration(fichaId, genId, { status: 'done', resultUrl });
     } else if (provider === 'fal-video') {
       const duration = +($('#videoDuration')?.value || 5);

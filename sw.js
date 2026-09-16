@@ -1,6 +1,6 @@
 // Bump this string on every deploy that changes a cached file — the browser only
 // re-installs the service worker (and refreshes the cache) when sw.js's own bytes change.
-const CACHE = 'ficha-referencia-6';
+const CACHE = 'ficha-referencia-7';
 const ASSETS = ['./', './index.html', './styles.css', './db.js', './promptBuilder.js', './exportImport.js', './app.js', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));
