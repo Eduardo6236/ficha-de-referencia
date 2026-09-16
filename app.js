@@ -27,6 +27,13 @@ const techFields = [
   ['colorPalette', 'Paleta de color'],
   ['setting', 'Escenario / entorno']
 ];
+const TECH_FIELD_OPTIONS = {
+  lighting: ['Luz natural', 'Hora dorada', 'Luz de estudio', 'Contraluz', 'Luz dura', 'Luz difusa', 'Neón', 'Luz de vela', 'Claroscuro', 'Luz de mediodía'],
+  cameraLens: ['35mm', '50mm', '85mm retrato', 'Gran angular 24mm', 'Teleobjetivo', 'Ojo de pez', 'Macro', 'Anamórfico cinematográfico', 'Cámara en mano'],
+  mood: ['Misterioso', 'Melancólico', 'Épico', 'Romántico', 'Tenso', 'Sereno', 'Nostálgico', 'Onírico', 'Oscuro', 'Alegre'],
+  colorPalette: ['Cálida', 'Fría', 'Monocromática', 'Alto contraste', 'Pastel', 'Saturada', 'Desaturada', 'Tonos tierra', 'Blanco y negro', 'Neón vibrante'],
+  setting: ['Ciudad nocturna', 'Bosque', 'Interior minimalista', 'Playa', 'Desierto', 'Estudio fotográfico', 'Calle urbana', 'Montaña', 'Espacio futurista', 'Café']
+};
 
 const state = { fichas: [], fichaId: null, tab: 'ficha', availableTags: [] };
 
@@ -182,7 +189,10 @@ function tabFicha(f) {
     <div class="card">
       <h2>Detalles técnicos</h2>
       <div class="form-grid">
-        ${techFields.map(([k, label]) => `<label class="field"><span>${label}</span><input name="tech_${k}" value="${esc(f.technical?.[k] || '')}"></label>`).join('')}
+        ${techFields.map(([k, label]) => `<label class="field"><span>${label}</span>
+          <input name="tech_${k}" list="techlist_${k}" value="${esc(f.technical?.[k] || '')}" placeholder="Elegí de la lista o escribí el tuyo" autocomplete="off">
+          <datalist id="techlist_${k}">${(TECH_FIELD_OPTIONS[k] || []).map(o => `<option value="${esc(o)}">`).join('')}</datalist>
+        </label>`).join('')}
       </div>
     </div>
     <div class="toolbar"><button type="submit" class="primary">Guardar cambios</button></div>
