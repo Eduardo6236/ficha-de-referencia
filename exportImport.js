@@ -49,12 +49,53 @@ const ExportImport = (() => {
     return navigator.clipboard.writeText(prompt || '');
   }
 
-  function downloadImage(dataUrl, filename) {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = filename;
-    a.click();
+  function extFromMime(mime) {
+    const map = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm' };
+    return map[mime] || (mime || '').split('/')[1] || 'bin';
   }
 
-  return { exportFicha, exportLibrary, importFile, copyPromptToClipboard, downloadImage, slug };
+  function dataUrlToBlob(dataUrl) {
+    const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
+    const mime = match?.[1] || 'application/octet-stream';
+    const bin = atob(match?.[2] || '');
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
+  // Deja elegir dónde guardar: diálogo nativo "Guardar como" en desktop
+  // (Chrome/Edge), hoja de compartir/guardar en Android. Si ninguno está
+  // disponible, cae en la descarga automática de siempre.
+  async function saveBlob(blob, filename) {
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: 'Archivo', accept: { [blob.type || 'application/octet-stream']: ['.' + extFromMime(blob.type)] } }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+      }
+    }
+    const file = new File([blob], filename, { type: blob.type });
+    if (navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; }
+      catch (err) { if (err?.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function downloadImage(dataUrl, filename) {
+    return saveBlob(dataUrlToBlob(dataUrl), filename);
+  }
+
+  return { exportFicha, exportLibrary, importFile, copyPromptToClipboard, downloadImage, saveBlob, slug };
 })();

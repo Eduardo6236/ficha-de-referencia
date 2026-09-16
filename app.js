@@ -599,17 +599,13 @@ async function downloadGeneration(f, genId) {
   const ext = g.kind === 'video' ? 'mp4' : 'png';
   const filename = `${ExportImport.slug(f.name)}-${g.provider}.${ext}`;
   if (g.resultUrl.startsWith('data:')) {
-    ExportImport.downloadImage(g.resultUrl, filename);
+    await ExportImport.downloadImage(g.resultUrl, filename);
     return;
   }
   try {
     const res = await fetch(g.resultUrl);
     const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    await ExportImport.saveBlob(blob, filename);
   } catch {
     window.open(g.resultUrl, '_blank');
   }
