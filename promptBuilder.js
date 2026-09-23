@@ -36,7 +36,11 @@ const PromptBuilder = (() => {
     const t = ficha.technical || {};
     const parts = [];
 
-    parts.push(`${styleText(style)} of ${ficha.name || 'the subject'}.`);
+    const name = ficha.name || 'the subject';
+    parts.push(
+      `Maintain exactly the same facial identity, body proportions, skin tone, hairstyle, and distinctive features defined in ${name} Visual Identity Profile. ` +
+      `Do not alter the apparent age or the facial structure and create an ${styleText(style)}.`
+    );
     if (d.physicalTraits) parts.push(`${d.physicalTraits}.`);
     if (d.outfit) parts.push(`Wearing ${d.outfit}.`);
     if (d.distinguishingFeatures) parts.push(`${d.distinguishingFeatures}.`);
