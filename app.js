@@ -415,7 +415,7 @@ function tabGenerar(f) {
       <h2>Prompt</h2>
       <div class="form-grid">
         <label class="field"><span>Plantilla para plataforma</span><select id="promptPlatform">
-          ${[['nano-banana', 'Nano Banana'], ['fal-image', 'Fal.ai (imagen)'], ['openai-image', 'ChatGPT (imagen)'], ['fal-video', 'Fal.ai / Kling (video)'], ['higgsfield', 'Higgsfield'], ['veo', 'Veo'], ['other', 'Otra plataforma']].map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}
+          ${[['nano-banana', 'Nano Banana'], ['fal-image', 'Fal.ai (imagen)'], ['openai-image', 'ChatGPT (imagen)'], ['meigen-image', 'MeiGen (imagen)'], ['fal-video', 'Fal.ai / Kling (video)'], ['higgsfield', 'Higgsfield'], ['veo', 'Veo'], ['other', 'Otra plataforma']].map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}
         </select></label>
         <div class="field" style="align-self:end"><button type="button" id="regenPrompt">↻ Regenerar sugerencia</button></div>
       </div>
@@ -430,6 +430,13 @@ function tabGenerar(f) {
         <button class="provider-btn" data-generate="nano-banana" ${f.locked || noRefs ? 'disabled' : ''}><b>Nano Banana</b><small>Imagen · Gemini</small></button>
         <button class="provider-btn" data-generate="fal-image" ${f.locked || noRefs ? 'disabled' : ''}><b>Fal.ai</b><small>Imagen</small></button>
         <button class="provider-btn" data-generate="openai-image" ${f.locked || noRefs ? 'disabled' : ''}><b>ChatGPT</b><small>Imagen · OpenAI</small></button>
+        <div class="provider-btn" style="gap:8px">
+          <b>MeiGen</b><small>Imagen · varios modelos</small>
+          <label class="field" style="margin-top:4px"><span>Modelo</span><select id="meigenModel">
+            ${MEIGEN_MODELS.map(m => `<option value="${m.id}">${m.label}</option>`).join('')}
+          </select></label>
+          <button data-generate="meigen-image" ${f.locked || noRefs ? 'disabled' : ''}>Generar imagen</button>
+        </div>
         <div class="provider-btn" style="gap:8px">
           <b>Fal.ai / Kling</b><small>Video desde imagen</small>
           <label class="field" style="margin-top:4px"><span>Duración (seg)</span><input id="videoDuration" type="number" min="3" max="15" value="5" style="width:70px"></label>
@@ -500,6 +507,44 @@ async function apiOpenAiImage(f, prompt) {
   return `data:${data.mimeType};base64,${data.imageBase64}`;
 }
 
+// maxRefs: límite de imágenes de referencia por modelo según la API de MeiGen.
+const MEIGEN_MODELS = [
+  { id: 'seedream-5.0-pro', label: 'Seedream 5.0 Pro', maxRefs: 10 },
+  { id: 'gpt-image-2.5', label: 'GPT Image 2.5', maxRefs: 16 },
+  { id: 'gemini-3-pro-image-preview', label: 'Nanobanana Pro', maxRefs: 14 },
+  { id: 'nanobanana-2', label: 'Nanobanana 2', maxRefs: 14 },
+  { id: 'midjourney-v8.1', label: 'Midjourney V8.2', maxRefs: 1 },
+  { id: 'grok-image', label: 'Grok Imagine 2.0', maxRefs: 3 }
+];
+const MEIGEN_POLL_MS = 3000;
+
+async function apiMeigenSubmit(f, prompt, modelId) {
+  const model = MEIGEN_MODELS.find(m => m.id === modelId) || MEIGEN_MODELS[0];
+  // La principal va primero para que sobreviva al recorte en modelos con pocas referencias.
+  const ordered = [...f.referenceImages].sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+  const referenceImages = await Promise.all(ordered.slice(0, model.maxRefs).map(r => ensureSendableDataUrl(r.dataUrl)));
+  const data = await callApi('/api/generate-meigen-image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, referenceImages, modelId: model.id }) });
+  return data.generationId;
+}
+
+async function pollMeigen(fichaId, genId, generationId) {
+  try {
+    const data = await callApi(`/api/meigen-status?id=${encodeURIComponent(generationId)}`);
+    if (data.status === 'completed' && data.imageUrl) {
+      const resultUrl = await toLocalDataUrl(data.imageUrl);
+      await finishGeneration(fichaId, genId, { status: 'done', resultUrl });
+      return;
+    }
+    if (data.status === 'failed' || data.status === 'completed') {
+      await finishGeneration(fichaId, genId, { status: 'error', error: data.error || 'La generación falló en MeiGen.' });
+      return;
+    }
+    setTimeout(() => pollMeigen(fichaId, genId, generationId), MEIGEN_POLL_MS);
+  } catch (err) {
+    await finishGeneration(fichaId, genId, { status: 'error', error: err.message });
+  }
+}
+
 async function finishGeneration(fichaId, genId, patch) {
   const fresh = await DB.get('fichas', fichaId);
   if (!fresh) return;
@@ -550,6 +595,11 @@ async function startGeneration(f, provider) {
     } else if (provider === 'openai-image') {
       const resultUrl = await apiOpenAiImage(f, prompt);
       await finishGeneration(fichaId, genId, { status: 'done', resultUrl });
+    } else if (provider === 'meigen-image') {
+      const modelId = $('#meigenModel')?.value;
+      const generationId = await apiMeigenSubmit(f, prompt, modelId);
+      await finishGeneration(fichaId, genId, { generationId, model: modelId });
+      pollMeigen(fichaId, genId, generationId);
     } else if (provider === 'fal-video') {
       const duration = +($('#videoDuration')?.value || 5);
       const audio = !!$('#videoAudio')?.checked;
