@@ -387,7 +387,9 @@ function genCard(g) {
   const statusLabel = g.status === 'working' ? 'Generando…' : g.status === 'error' ? 'Error' : 'Listo';
   let media;
   if (g.status === 'done') {
-    media = g.kind === 'video' ? `<video src="${g.resultUrl}" controls></video>` : `<img src="${g.resultUrl}">`;
+    media = g.kind === 'video'
+      ? `<video src="${g.resultUrl}" controls></video>`
+      : `<img src="${g.resultUrl}" class="previewable" data-preview-gen="${g.id}" title="Ver en grande">`;
   } else if (g.status === 'error') {
     media = `<div style="height:140px;display:flex;align-items:center;justify-content:center;color:var(--danger);padding:10px;text-align:center;font-size:12px">${esc(g.error || 'Error')}</div>`;
   } else {
@@ -397,9 +399,10 @@ function genCard(g) {
     ${media}
     <div class="body">
       <span class="status-pill ${statusClass}">${statusLabel}</span>
-      <small>${esc(g.provider)} · ${new Date(g.createdAt).toLocaleString()}</small>
+      <small>${esc(providerLabel(g))} · ${new Date(g.createdAt).toLocaleString()}</small>
       <div class="row">
         ${g.status === 'done' && g.kind === 'image' ? `<button data-use-ref="${g.id}">Usar como referencia</button>` : ''}
+        ${g.status === 'done' ? `<button data-preview-gen="${g.id}">Ver</button>` : ''}
         ${g.status === 'done' ? `<button data-download-gen="${g.id}">Descargar</button>` : ''}
         <button class="danger" data-delete-gen="${g.id}">Eliminar</button>
       </div>
@@ -461,6 +464,7 @@ function bindGenerarTab(f) {
   $$('[data-generate]').forEach(btn => btn.onclick = () => startGeneration(f, btn.dataset.generate));
   $$('[data-use-ref]').forEach(btn => btn.onclick = () => useGenerationAsReference(f, btn.dataset.useRef));
   $$('[data-download-gen]').forEach(btn => btn.onclick = () => downloadGeneration(f, btn.dataset.downloadGen));
+  $$('[data-preview-gen]').forEach(el => el.onclick = () => openGenerationPreview(f, el.dataset.previewGen));
   $$('[data-delete-gen]').forEach(btn => btn.onclick = async () => {
     f.generations = f.generations.filter(x => x.id !== btn.dataset.deleteGen);
     await persist(f);
@@ -641,6 +645,47 @@ async function useGenerationAsReference(f, genId) {
   f.referenceImages.push({ id: uid(), dataUrl, note: `Generada: ${g.provider}`, isPrimary: false });
   await persist(f);
   toast('Imagen añadida como referencia');
+}
+
+function providerLabel(g) {
+  if (g.provider !== 'meigen-image') return g.provider;
+  const model = MEIGEN_MODELS.find(m => m.id === g.model);
+  return `MeiGen · ${model ? model.label : g.model || 'modelo por defecto'}`;
+}
+
+// Visor a tamaño completo (la miniatura de la tarjeta va recortada con object-fit:cover).
+function openGenerationPreview(f, genId) {
+  const g = f.generations.find(x => x.id === genId);
+  if (!g || g.status !== 'done') return;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'gen-preview';
+  const media = g.kind === 'video'
+    ? `<video src="${g.resultUrl}" controls autoplay></video>`
+    : `<img src="${g.resultUrl}" alt="Imagen generada">`;
+  dialog.innerHTML = `
+    <div class="gen-preview-media">${media}</div>
+    <div class="gen-preview-info">
+      <small>${esc(providerLabel(g))} · ${new Date(g.createdAt).toLocaleString()}<span data-dims></span></small>
+      <details><summary>Prompt usado</summary><p>${esc(g.prompt || '')}</p></details>
+      <div class="row">
+        ${g.kind === 'image' ? '<button data-preview-action="use-ref">Usar como referencia</button>' : ''}
+        <button class="primary" data-preview-action="download">Descargar</button>
+        <button data-preview-action="close">Cerrar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(dialog);
+
+  const img = dialog.querySelector('img');
+  if (img) img.onload = () => { dialog.querySelector('[data-dims]').textContent = ` · ${img.naturalWidth}×${img.naturalHeight}px`; };
+  const closePreview = () => { if (dialog.open) dialog.close(); dialog.remove(); };
+  dialog.addEventListener('close', closePreview); // Esc
+  // Clic fuera del contenido (sobre el fondo) cierra el visor.
+  dialog.addEventListener('click', e => { if (e.target === dialog) closePreview(); });
+  dialog.querySelector('[data-preview-action="close"]').onclick = closePreview;
+  dialog.querySelector('[data-preview-action="download"]').onclick = () => downloadGeneration(f, genId);
+  const useRef = dialog.querySelector('[data-preview-action="use-ref"]');
+  if (useRef) useRef.onclick = async () => { closePreview(); await useGenerationAsReference(f, genId); };
+  dialog.showModal();
 }
 
 async function downloadGeneration(f, genId) {
