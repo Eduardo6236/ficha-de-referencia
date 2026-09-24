@@ -73,6 +73,7 @@ async function load() {
     state.availableTags = await DB.all('tags');
   }
   renderAll();
+  repairMeigenResults().then(refresh).catch(() => { /* se reintenta en la próxima carga */ });
 }
 async function refresh() {
   state.fichas = await DB.all('fichas');
@@ -531,11 +532,26 @@ async function apiMeigenSubmit(f, prompt, modelId) {
   return data.generationId;
 }
 
+// images.meigen.ai bloquea peticiones con Referer de otro sitio: se descarga vía nuestro servidor.
+function meigenProxyUrl(url) { return `/api/meigen-image?url=${encodeURIComponent(url)}`; }
+function isMeigenCdnUrl(url) { return typeof url === 'string' && url.startsWith('https://images.meigen.ai/'); }
+
+// Resultados de MeiGen guardados antes del proxy quedaron con la URL directa del CDN (no carga).
+async function repairMeigenResults() {
+  for (const f of state.fichas) {
+    const broken = (f.generations || []).filter(g => g.status === 'done' && isMeigenCdnUrl(g.resultUrl));
+    if (!broken.length) continue;
+    for (const g of broken) g.resultUrl = await toLocalDataUrl(meigenProxyUrl(g.resultUrl));
+    f.updatedAt = now();
+    await DB.put('fichas', f);
+  }
+}
+
 async function pollMeigen(fichaId, genId, generationId) {
   try {
     const data = await callApi(`/api/meigen-status?id=${encodeURIComponent(generationId)}`);
     if (data.status === 'completed' && data.imageUrl) {
-      const resultUrl = await toLocalDataUrl(data.imageUrl);
+      const resultUrl = await toLocalDataUrl(meigenProxyUrl(data.imageUrl));
       await finishGeneration(fichaId, genId, { status: 'done', resultUrl });
       return;
     }

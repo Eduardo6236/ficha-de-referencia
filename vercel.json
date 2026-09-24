@@ -2,6 +2,9 @@
   "functions": {
     "api/*.js": {
       "maxDuration": 60
+    },
+    "api/generate-openai-image.js": {
+      "maxDuration": 300
     }
   }
 }

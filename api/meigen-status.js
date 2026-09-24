@@ -28,6 +28,8 @@ module.exports = async function handler(req, res) {
       res.status(response.status).json({ error: `Error de MeiGen: ${data.error || response.status}` });
       return;
     }
+    // Sin esto el navegador puede reusar un "processing" viejo (Vercel manda ETag).
+    res.setHeader('cache-control', 'no-store');
     res.status(200).json({
       status: data.status,
       imageUrl: data.imageUrl || data.imageUrls?.[0] || null,
