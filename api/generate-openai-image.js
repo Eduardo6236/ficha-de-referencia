@@ -34,6 +34,9 @@ module.exports = async function handler(req, res) {
       const form = new FormData();
       form.append('model', MODEL);
       form.append('prompt', prompt);
+      // Por defecto la fidelidad es "low" y el modelo reinterpreta la cara;
+      // "high" conserva rasgos y proporciones de la referencia (no existe en -mini).
+      if (!MODEL.includes('mini')) form.append('input_fidelity', 'high');
       referenceImages.forEach((dataUrl, i) => {
         const blob = dataUrlToBlob(dataUrl);
         const ext = (blob.type.split('/')[1] || 'png').split('+')[0];

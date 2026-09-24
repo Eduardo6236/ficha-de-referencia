@@ -2,11 +2,16 @@ const PromptBuilder = (() => {
   const STYLE_PRESETS = {
     'photoreal-cinematic': {
       label: 'Fotorrealista cinematográfico',
-      text: 'ultra-realistic cinematic photography, film-still quality, natural skin texture and pores, shot on 35mm lens, shallow depth of field, professional color grading'
+      photoreal: true,
+      text: 'real-life cinematic photograph, captured with a full-frame camera and 35mm lens, film-still quality, natural skin texture with visible pores and fine imperfections, true-to-life colors, shallow depth of field, professional color grading'
     },
     'fantasy': {
       label: 'Fantasía',
       text: 'epic fantasy digital painting, dramatic atmosphere, intricate detail, painterly rendering, concept-art quality'
+    },
+    'pixar': {
+      label: 'Animación 3D (tipo Pixar)',
+      text: 'stylized 3D animated feature film look, Pixar-style character rendering, soft global illumination, expressive stylized proportions'
     },
     'anime': {
       label: 'Anime',
@@ -14,10 +19,19 @@ const PromptBuilder = (() => {
     }
   };
 
+  // Se agrega solo en estilos fotorrealistas: evita que modelos como gpt-image-1
+  // o flux-kontext tiendan al look de juguete / plastilina / render 3D.
+  const REALISM_GUARD =
+    'This must look like an unretouched real photograph of a real person: realistic adult human anatomy, ' +
+    'natural head-to-body ratio and true body proportions exactly as in the reference, real fabric and material textures, ' +
+    'physically accurate lighting and shadows. Not a 3D render, not CGI, not a cartoon, not a caricature, ' +
+    'not a toy, figurine, clay or plasticine model, no oversized head, no smooth plastic or waxy skin, no airbrushing.';
+
   const PLATFORM_NOTES = {
     'nano-banana': '',
     'fal-image': '',
     'openai-image': '',
+    'meigen-image': '',
     'fal-video': 'Describe camera movement and motion explicitly (e.g. slow push-in, orbit, handheld).',
     'kling': 'Describe camera movement and motion explicitly (e.g. slow push-in, orbit, handheld).',
     'higgsfield': '',
@@ -25,22 +39,34 @@ const PromptBuilder = (() => {
     'other': ''
   };
 
-  function styleText(style) {
-    if (STYLE_PRESETS[style]) return STYLE_PRESETS[style].text;
-    return style || '';
+  // Estilo por defecto: fotorrealista, salvo que la ficha pida otro explícitamente.
+  function resolveStyle(ficha, styleOverride) {
+    const key = styleOverride || ficha.style || 'photoreal-cinematic';
+    if (key === 'custom') {
+      const custom = (ficha.customStyle || '').trim();
+      return custom
+        ? { text: custom, photoreal: false }
+        : { text: STYLE_PRESETS['photoreal-cinematic'].text, photoreal: true };
+    }
+    const preset = STYLE_PRESETS[key];
+    if (preset) return { text: preset.text, photoreal: !!preset.photoreal };
+    return { text: key, photoreal: false };
   }
 
   function build(ficha, { platform = 'nano-banana', styleOverride } = {}) {
-    const style = styleOverride || ficha.style;
+    const style = resolveStyle(ficha, styleOverride);
     const d = ficha.description || {};
     const t = ficha.technical || {};
     const parts = [];
 
     const name = ficha.name || 'the subject';
     parts.push(
-      `Maintain exactly the same facial identity, body proportions, skin tone, hairstyle, and distinctive features defined in ${name} Visual Identity Profile. ` +
-      `Do not alter the apparent age or the facial structure and create an ${styleText(style)}.`
+      `Use the reference image(s) as the exact identity of ${name}. Maintain exactly the same face, facial structure, ` +
+      `body proportions, body build, skin tone, hairstyle, and distinctive features defined in ${name} Visual Identity Profile. ` +
+      `Do not alter the apparent age.`
     );
+    parts.push(`Style: ${style.text}.`);
+    if (style.photoreal) parts.push(REALISM_GUARD);
     if (d.physicalTraits) parts.push(`${d.physicalTraits}.`);
     if (d.outfit) parts.push(`Wearing ${d.outfit}.`);
     if (d.distinguishingFeatures) parts.push(`${d.distinguishingFeatures}.`);
