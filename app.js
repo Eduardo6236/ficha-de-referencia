@@ -793,8 +793,16 @@ window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); instal
 $('#installBtn').onclick = async () => { await installPrompt?.prompt(); $('#installBtn').hidden = true; };
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
 
-load().catch(err => {
+const SPLASH_MIN_MS = 1800;
+const hideSplash = () => {
+  const splash = $('#splash');
+  splash.classList.add('hide');
+  splash.addEventListener('transitionend', () => splash.remove(), { once: true });
+};
+const splashDelay = new Promise(resolve => setTimeout(resolve, SPLASH_MIN_MS));
+
+Promise.all([load().catch(err => {
   console.error(err);
   $('#workspace').innerHTML = `<div class="empty"><h1>Error de almacenamiento</h1><p>${esc(err.message)}</p></div>`;
-});
+}), splashDelay]).then(hideSplash);
 })();

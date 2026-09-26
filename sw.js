@@ -1,7 +1,7 @@
 // Bump this string on every deploy that changes a cached file — the browser only
 // re-installs the service worker (and refreshes the cache) when sw.js's own bytes change.
-const CACHE = 'ficha-referencia-15';
-const ASSETS = ['./', './index.html', './styles.css', './db.js', './promptBuilder.js', './exportImport.js', './app.js', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'ficha-referencia-16';
+const ASSETS = ['./', './index.html', './styles.css', './db.js', './promptBuilder.js', './exportImport.js', './app.js', './manifest.json', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-128.png', './icons/lumen-splash.png'];
 
 // cache: 'reload' salta la caché HTTP del navegador; si no, addAll puede guardar versiones viejas.
 self.addEventListener('install', e => e.waitUntil(

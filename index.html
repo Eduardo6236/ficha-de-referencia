@@ -8,11 +8,13 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preload" as="image" href="icons/lumen-splash.png">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div id="splash" aria-hidden="true"><img src="icons/lumen-splash.png" alt=""></div>
 <header class="topbar">
-  <div class="brand"><b>FICHA</b> DE REFERENCIA</div>
+  <div class="brand"><img class="brand-icon" src="icons/icon-128.png" alt=""><span><b>FICHA</b> DE REFERENCIA</span></div>
   <div class="top-actions">
     <button id="installBtn" hidden>Instalar app</button>
     <button id="exportLibraryBtn" title="Exportar toda la librería">Exportar todo</button>
